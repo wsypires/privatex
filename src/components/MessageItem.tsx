@@ -176,6 +176,35 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           </div>
         )}
 
+        {/* 7. Action Buttons (quando enviados em mensagens de texto ou imagem) */}
+        {!isAlert && message.buttons && message.buttons.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-1.5">
+            {message.buttons.map((btn) => (
+              <button
+                key={btn.id}
+                onClick={() => {
+                  if (btn.action === 'open_chart') {
+                    onOpenChart('BTC/USDT');
+                  } else if (btn.url) {
+                    window.open(btn.url, '_blank');
+                  } else {
+                    onExecuteAction(btn.action, btn.id, message.id, roomId, btn.payload);
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+                  btn.style === 'binance-buy'
+                    ? 'bg-[#0ECB81] hover:bg-[#0BA86B] text-white shadow-sm'
+                    : btn.style === 'binance-sell'
+                    ? 'bg-[#F6465D] hover:bg-[#D9384E] text-white shadow-sm'
+                    : 'bg-[#2B2F36] hover:bg-[#474D57] text-[#EAECEF] border border-[#474D57]/60'
+                }`}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Reactions & Actions Row */}
         <div className="flex items-center gap-1.5 pt-1">
           {message.reactions &&

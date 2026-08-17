@@ -544,7 +544,7 @@ app.post('/api/v1/rooms/:roomId/messages', (req, res) => {
   res.status(201).json(newMsg);
 });
 
-// 5. Spec #11: External Notification API Endpoint
+// 5. Spec #11: External Notification API Endpoint (100% Flexível e sem regras rígidas)
 // POST /api/v1/notifications/send
 app.post('/api/v1/notifications/send', (req, res) => {
   const {
@@ -554,8 +554,13 @@ app.post('/api/v1/notifications/send', (req, res) => {
     type,
     title,
     message,
+    text, // suporte para campo 'text'
+    body, // suporte para campo 'body'
+    content, // suporte para campo 'content'
     alertData,
     image,
+    imageUrl,
+    img,
     video,
     audio,
     file,
@@ -582,38 +587,41 @@ app.post('/api/v1/notifications/send', (req, res) => {
     senderBot = bots[0];
   }
 
-  // Determine msgtype
-  let msgtype: MatrixMessage['msgtype'] = 'm.text';
-  if (type === 'alert' || alertData || title?.includes('ALERTA')) {
-    msgtype = 'm.alert';
-  } else if (image) {
-    msgtype = 'm.image';
-  } else if (video) {
-    msgtype = 'm.video';
-  } else if (audio) {
-    msgtype = 'm.audio';
-  } else if (file) {
-    msgtype = 'm.file';
-  }
+  const rawText = message || text || body || content || '';
+  const mediaLink = image || imageUrl || img || video || audio || (file && typeof file === 'string' ? file : file?.url);
 
-  const generatedAlertData = alertData || (type === 'alert' || title ? {
-    severity: (title?.includes('VENDA') || title?.includes('CRITICAL') ? 'CRITICAL' : title?.includes('COMPRA') ? 'SUCCESS' : 'WARNING') as any,
-    tag: 'API AUTOMATION',
-    pair: title?.split(' ')[0] || 'BTC/USDT',
-    actionType: (title?.includes('VENDA') ? 'SELL' : title?.includes('COMPRA') ? 'BUY' : 'ALERT') as any,
-    price: req.body.price || '$118,250.00',
-    strategy: req.body.strategy || 'EMA + RSI Automated Signal',
-    status: 'CONFIRMADO VIA API',
-  } : undefined);
+  // Determine msgtype flexibly: só ativa card de alerta se o usuário explicitamente pediu ou enviou alertData
+  let msgtype: MatrixMessage['msgtype'] = 'm.text';
+  if (type === 'alert' && alertData) {
+    msgtype = 'm.alert';
+  } else if (image || imageUrl || img || type === 'image') {
+    msgtype = 'm.image';
+  } else if (video || type === 'video') {
+    msgtype = 'm.video';
+  } else if (audio || type === 'audio') {
+    msgtype = 'm.audio';
+  } else if (file || type === 'file') {
+    msgtype = 'm.file';
+  } else if (type === 'alert') {
+    msgtype = 'm.alert';
+  }
 
   const formattedButtons: ActionButton[] = (buttons || []).map((btn: any, idx: number) => ({
     id: btn.id || `btn_${Date.now()}_${idx}`,
-    label: btn.label || 'Ação',
-    action: btn.action || 'open_url',
-    url: btn.url,
+    label: btn.label || btn.text || btn.title || 'Ação',
+    action: btn.action || (btn.url ? 'open_url' : 'custom_action'),
+    url: btn.url || btn.link,
     style: btn.style || (btn.action === 'buy' ? 'binance-buy' : btn.action === 'sell' ? 'binance-sell' : 'outline'),
     payload: btn.payload || { action: btn.action, raw: btn },
   }));
+
+  // Monta o corpo da mensagem sem forçar templates ou ícones extras se o usuário só enviou texto puro
+  let finalBody = rawText;
+  if (title && rawText) {
+    finalBody = `${title}\n\n${rawText}`;
+  } else if (title && !rawText) {
+    finalBody = title;
+  }
 
   const newEvent: MatrixMessage = {
     id: `$event_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -628,11 +636,11 @@ app.post('/api/v1/notifications/send', (req, res) => {
     },
     timestamp: Date.now(),
     msgtype: msgtype,
-    body: (title ? `🚨 ${title}\n\n` : '') + (message || ''),
-    alertData: generatedAlertData,
-    mediaUrl: image || video || audio || file?.url,
-    mediaThumbnail: image,
-    fileName: file?.name,
+    body: finalBody,
+    alertData: alertData || undefined,
+    mediaUrl: mediaLink,
+    mediaThumbnail: mediaLink,
+    fileName: file?.name || (typeof file === 'string' ? file.split('/').pop() : undefined),
     fileSize: file?.size,
     mimeType: file?.mimeType,
     duration: req.body.duration,
@@ -659,8 +667,7 @@ app.post('/api/v1/notifications/send', (req, res) => {
     room_id: targetRoom.id,
     room_name: targetRoom.name,
     timestamp: newEvent.timestamp,
-    message: 'Matrix notification event dispatched successfully.',
-    delivered_to: `${targetRoom.memberCount} members`,
+    message: 'Notificação recebida e entregue com sucesso.',
   });
 });
 
