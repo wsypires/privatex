@@ -1,0 +1,6 @@
+{
+  "name": "PrivatX",
+  "description": "PrivatX — Mensageria ultrassegura e notificações automatizadas via Matrix Synapse para Web App e Mobile Android.",
+  "requestFramePermissions": ["notifications"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
